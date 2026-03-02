@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Y Note - Advanced Notepad</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Custom Styles (Scrollbars, Overlay Hacks, Animations) -->
+  <style>
+    .custom-scrollbar::-webkit-scrollbar { width: 12px; height: 12px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.4); border-radius: 6px; border: 3px solid transparent; background-clip: padding-box; }
+    .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(71, 85, 105, 0.6); }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(107, 114, 128, 0.8); }
+    
+    .overlay-scrollbar::-webkit-scrollbar { width: 12px; height: 12px; }
+    .overlay-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .overlay-scrollbar::-webkit-scrollbar-thumb { background: transparent; }
+
+    .editor-textarea {
+      color: transparent !important;
+      caret-color: #0f172a;
+    }
+    .dark .editor-textarea {
+      caret-color: #f1f5f9;
+    }
+    .editor-textarea::selection {
+      background-color: rgba(59, 130, 246, 0.3) !important;
+      color: #0f172a !important; 
+    }
+    .dark .editor-textarea::selection {
+      background-color: rgba(59, 130, 246, 0.5) !important;
+      color: #f1f5f9 !important;
+    }
+
+    @keyframes slide-in { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .animate-slide-in { animation: slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+    @keyframes fade-in { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    .animate-fade-in { animation: fade-in 0.2s ease-out; }
+    
+    .hide { display: none !important; }
+  </style>
+</head>
+<body class="flex flex-col h-screen w-full transition-colors duration-300 bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 overflow-hidden">
+
+  <!-- --- Top Menu Bar --- -->
+  <div class="flex flex-col bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 shadow-sm z-10 flex-shrink-0">
+    <!-- Main Nav -->
+    <div class="flex items-center justify-between px-4 py-2">
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 text-blue-600 dark:text-blue-500 font-black text-xl tracking-tight mr-2">
+          <div class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center">
+            <i data-lucide="edit-3" class="w-4 h-4" stroke-width="3"></i>
+          </div>
+          <span>Y Note</span>
+        </div>
+        
+        <div class="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-1"></div>
+
+        <div class="flex items-center gap-0.5">
+          <button id="btn-new" class="p-2 rounded-lg transition-colors hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300" title="New Note"><i data-lucide="plus" class="w-4 h-4"></i></button>
+          <button id="btn-open" class="p-2 rounded-lg transition-colors hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300" title="Open File"><i data-lucide="folder-open" class="w-4 h-4"></i></button>
+          <button id="btn-save" class="p-2 rounded-lg transition-colors hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300" title="Download (Ctrl+S)"><i data-lucide="save" class="w-4 h-4"></i></button>
+          <input type="file" id="file-input" class="hidden" accept=".txt,.md,.json,.csv,.js,.html,.css" />
+        </div>
+
+        <div class="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-1"></div>
+
+        <div class="flex items-center gap-0.5">
+          <button id="btn-find" class="p-2 rounded-lg transition-colors hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300" title="Find & Replace (Ctrl+F)"><i data-lucide="search" class="w-4 h-4"></i></button>
+          <button id="btn-preview" class="p-2 rounded-lg transition-colors hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300" title="Toggle Split Preview"><i data-lucide="columns" class="w-4 h-4"></i></button>
+          <button id="btn-theme" class="p-2 rounded-lg transition-colors hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300" title="Toggle Theme"><i data-lucide="moon" class="w-4 h-4" id="theme-icon"></i></button>
+          <button id="btn-zen" class="p-2 rounded-lg transition-colors hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300" title="Zen Mode"><i data-lucide="maximize-2" class="w-4 h-4" id="zen-icon"></i></button>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <input type="text" id="note-title" placeholder="Note Title..." class="bg-transparent border-b-2 border-transparent hover:border-slate-300 focus:border-blue-500 dark:hover:border-slate-700 dark:focus:border-blue-500 outline-none px-2 py-1 text-sm font-bold transition-all w-48 focus:w-64 text-right" />
+        <button id="btn-settings" class="p-2 rounded-lg transition-colors hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300" title="Settings"><i data-lucide="settings" class="w-4 h-4"></i></button>
+      </div>
+    </div>
+
+    <!-- Formatting Toolbar -->
+    <div id="formatting-toolbar" class="flex items-center gap-1 px-4 py-1.5 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+      <button class="format-btn p-1.5 rounded-md text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" data-before="**" data-after="**" title="Bold (Ctrl+B)"><i data-lucide="bold" class="w-3.5 h-3.5"></i></button>
+      <button class="format-btn p-1.5 rounded-md text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" data-before="*" data-after="*" title="Italic (Ctrl+I)"><i data-lucide="italic" class="w-3.5 h-3.5"></i></button>
+      <div class="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1"></div>
+      <button class="format-btn p-1.5 rounded-md text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" data-before="### " title="Heading"><i data-lucide="heading" class="w-3.5 h-3.5"></i></button>
+      <button class="format-btn p-1.5 rounded-md text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" data-before="- " title="List"><i data-lucide="list" class="w-3.5 h-3.5"></i></button>
+      <button class="format-btn p-1.5 rounded-md text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" data-before="> " title="Quote"><i data-lucide="text-quote" class="w-3.5 h-3.5"></i></button>
+      <button class="format-btn p-1.5 rounded-md text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" data-before="`" data-after="`" title="Code"><i data-lucide="code" class="w-3.5 h-3.5"></i></button>
+      <div class="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1"></div>
+      <button id="btn-upper" class="p-1.5 rounded-md text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="UPPERCASE Selection"><i data-lucide="arrow-up" class="w-3.5 h-3.5"></i></button>
+      <button id="btn-lower" class="p-1.5 rounded-md text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="lowercase Selection"><i data-lucide="arrow-down" class="w-3.5 h-3.5"></i></button>
+      <button id="btn-date" class="p-1.5 rounded-md text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="Insert Date/Time"><i data-lucide="clock" class="w-3.5 h-3.5"></i></button>
+      <div class="flex-1"></div>
+      <button id="btn-clear" class="p-1.5 rounded-md text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="Clear Tab"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+    </div>
+  </div>
+
+  <!-- --- Tab Bar --- -->
+  <div id="tab-bar" class="flex items-end px-2 pt-2 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 overflow-x-auto custom-scrollbar flex-shrink-0">
+    <div id="tabs-container" class="flex"></div>
+    <button id="btn-tab-add" class="p-1.5 ml-1 mb-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 transition-colors"><i data-lucide="plus" class="w-4 h-4"></i></button>
+  </div>
+
+  <!-- --- Main Workspace --- -->
+  <div class="flex-1 flex overflow-hidden relative bg-white dark:bg-[#0d1117]">
+    
+    <!-- Settings Sidebar Overlay -->
+    <div id="settings-panel" class="hide absolute top-0 right-0 w-80 h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl z-30 p-6 flex flex-col gap-6 animate-slide-in">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold flex items-center gap-2"><i data-lucide="settings" class="w-5 h-5"></i> Preferences</h2>
+        <button id="btn-close-settings" class="text-slate-500 hover:text-slate-800 dark:hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      
+      <div class="space-y-5">
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-medium">Word Wrap</span>
+          <button id="toggle-wrap" class="w-11 h-6 rounded-full transition-colors relative bg-slate-300 dark:bg-slate-700">
+            <div id="toggle-wrap-thumb" class="w-4 h-4 rounded-full bg-white absolute top-1 transition-transform translate-x-1"></div>
+          </button>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-medium">Line Numbers</span>
+          <button id="toggle-lines" class="w-11 h-6 rounded-full transition-colors relative bg-slate-300 dark:bg-slate-700">
+            <div id="toggle-lines-thumb" class="w-4 h-4 rounded-full bg-white absolute top-1 transition-transform translate-x-1"></div>
+          </button>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-medium">Syntax Highlighting</span>
+          <button id="toggle-syntax" class="w-11 h-6 rounded-full transition-colors relative bg-slate-300 dark:bg-slate-700">
+            <div id="toggle-syntax-thumb" class="w-4 h-4 rounded-full bg-white absolute top-1 transition-transform translate-x-1"></div>
+          </button>
+        </div>
+
+        <div class="space-y-2">
+          <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Typography</span>
+          <select id="select-font" class="w-full p-2 rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 outline-none focus:border-blue-500 text-sm font-medium">
+            <option value="font-mono">Fira Code / Monospace</option>
+            <option value="font-sans">Inter / Sans Serif</option>
+            <option value="font-serif">Merriweather / Serif</option>
+          </select>
+        </div>
+
+        <div class="space-y-2">
+          <span class="text-sm font-medium flex justify-between text-slate-500 dark:text-slate-400">
+            <span>Font Size</span>
+            <span id="font-size-display" class="text-blue-500 font-bold">16px</span>
+          </span>
+          <input type="range" id="range-font" min="12" max="32" value="16" class="w-full accent-blue-500" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Find & Replace Floating Widget -->
+    <div id="find-panel" class="hide absolute top-4 left-1/2 transform -translate-x-1/2 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border border-slate-200 dark:border-slate-700 shadow-2xl rounded-xl p-3 z-20 flex flex-col gap-2 w-[420px] animate-fade-in">
+      <div class="flex items-center justify-between pb-1 mb-1">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5"><i data-lucide="search" class="w-3.5 h-3.5"></i> Find & Replace</span>
+        <button id="btn-close-find" class="text-slate-400 hover:text-slate-800 dark:hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      
+      <div class="flex items-center gap-2">
+        <input type="text" id="find-input" placeholder="Find..." class="flex-1 p-2 text-sm bg-slate-100 dark:bg-slate-900 border border-transparent focus:border-blue-500 rounded-lg outline-none" />
+        <button id="btn-execute-find" class="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors" title="Find Next"><i data-lucide="arrow-right" class="w-4 h-4"></i></button>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <input type="text" id="replace-input" placeholder="Replace with..." class="flex-1 p-2 text-sm bg-slate-100 dark:bg-slate-900 border border-transparent focus:border-blue-500 rounded-lg outline-none" />
+        <button id="btn-execute-replace" class="px-3 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 text-sm font-medium transition-colors">Replace</button>
+        <button id="btn-execute-replace-all" class="px-3 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 text-sm font-medium transition-colors">All</button>
+      </div>
+    </div>
+
+    <!-- Editor Pane -->
+    <div class="flex flex-1 overflow-hidden relative">
+      <div id="line-numbers-container" class="w-14 flex-shrink-0 bg-slate-50 dark:bg-[#0d1117] border-r border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-600 text-right pr-3 py-6 select-none overflow-hidden font-mono" style="font-size: 16px; line-height: 1.6;">
+        <div id="line-numbers"></div>
+      </div>
+
+      <div class="relative flex-1 w-full h-full overflow-hidden bg-white dark:bg-[#0d1117]">
+        <!-- Syntax Highlighting Overlay -->
+        <div id="editor-overlay" aria-hidden="true" class="absolute inset-0 w-full h-full p-6 pointer-events-none overflow-auto overlay-scrollbar text-slate-800 dark:text-slate-300 font-mono whitespace-pre-wrap break-words" style="font-size: 16px; line-height: 1.6; tab-size: 4;">
+        </div>
+
+        <textarea id="editor-textarea" spellcheck="false" placeholder="Start typing..." class="absolute inset-0 w-full h-full resize-none outline-none p-6 custom-scrollbar font-mono whitespace-pre-wrap break-words editor-textarea" style="font-size: 16px; line-height: 1.6; tab-size: 4; background-color: transparent;"></textarea>
+      </div>
+    </div>
+
+    <!-- Preview Pane (Split Screen) -->
+    <div id="preview-container" class="hide flex-1 w-full h-full border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-[#161b22] p-8 overflow-y-auto custom-scrollbar markdown-body font-mono" style="font-size: 16px; line-height: 1.6;">
+      <div id="preview-content"></div>
+    </div>
+
+  </div>
+
+  <!-- --- Status Bar --- -->
+  <div class="flex items-center justify-between px-4 py-1.5 bg-blue-600 dark:bg-blue-700 text-white text-xs font-medium shadow-inner flex-shrink-0">
+    <div class="flex items-center gap-6">
+      <span class="flex items-center gap-1.5"><i data-lucide="align-left" class="w-3.5 h-3.5"></i> <span id="status-lines">0</span> L</span>
+      <span class="flex items-center gap-1.5"><i data-lucide="type" class="w-3.5 h-3.5"></i> <span id="status-words">0</span> W</span>
+      <span><span id="status-chars">0</span> C</span>
+    </div>
+    
+    <div class="flex items-center gap-6">
+      <span class="opacity-80">UTF-8</span>
+      <span class="opacity-80" id="status-wrap">Wrap</span>
+      <span class="flex items-center gap-1.5 min-w-[80px] justify-end" id="status-save-container">
+        <i data-lucide="check" class="w-3.5 h-3.5"></i> <span id="status-save">Saved</span>
+      </span>
+    </div>
+  </div>
+
+  <script>
+    // --- State Management ---
+    const defaultContent = '# Welcome to Y Note\n\nThis advanced version includes:\n- **Auto-Save** to LocalStorage\n- **Markdown Preview** Split-Screen\n- **Formatting Toolbar**\n- Text Transformation Utilities\n\n> Try selecting some text and clicking the toolbar icons above!';
+    
+    let tabs = JSON.parse(localStorage.getItem('ynote-tabs')) || [{ id: crypto.randomUUID(), title: 'Untitled 1', content: defaultContent, isModified: false }];
+    let settings = JSON.parse(localStorage.getItem('ynote-settings')) || {
+      theme: 'dark', wordWrap: true, fontSize: 16, fontFamily: 'font-mono',
+      showLineNumbers: true, fullScreen: false, splitPreview: false, syntaxHighlighting: true
+    };
+    let activeTabId = tabs[0]?.id || '';
+    
+    let saveTimeout = null;
+
+    // --- DOM Elements ---
+    const els = {
+      editorTextarea: document.getElementById('editor-textarea'),
+      editorOverlay: document.getElementById('editor-overlay'),
+      lineNumbers: document.getElementById('line-numbers'),
+      lineNumbersContainer: document.getElementById('line-numbers-container'),
+      previewContainer: document.getElementById('preview-container'),
+      previewContent: document.getElementById('preview-content'),
+      tabsContainer: document.getElementById('tabs-container'),
+      noteTitle: document.getElementById('note-title'),
+      statusLines: document.getElementById('status-lines'),
+      statusWords: document.getElementById('status-words'),
+      statusChars: document.getElementById('status-chars'),
+      statusWrap: document.getElementById('status-wrap'),
+      statusSave: document.getElementById('status-save'),
+      statusSaveContainer: document.getElementById('status-save-container'),
+      settingsPanel: document.getElementById('settings-panel'),
+      findPanel: document.getElementById('find-panel'),
+      findInput: document.getElementById('find-input'),
+      replaceInput: document.getElementById('replace-input'),
+      fileInput: document.getElementById('file-input'),
+      formattingToolbar: document.getElementById('formatting-toolbar'),
+      tabBar: document.getElementById('tab-bar')
+    };
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      if(!activeTabId && tabs.length > 0) activeTabId = tabs[0].id;
+      applySettings();
+      renderTabs();
+      updateEditorContent();
+      setupEventListeners();
+    });
+
+    // --- Core Functions ---
+    function getActiveTab() {
+      return tabs.find(t => t.id === activeTabId) || tabs[0];
+    }
+
+    function saveState(isModified = false) {
+      if (isModified) {
+        tabs = tabs.map(t => t.id === activeTabId ? { ...t, isModified: true } : t);
+        renderTabs();
+      }
+      
+      localStorage.setItem('ynote-tabs', JSON.stringify(tabs));
+      localStorage.setItem('ynote-settings', JSON.stringify(settings));
+
+      if (isModified) {
+        els.statusSave.innerText = 'Saving...';
+        els.statusSaveContainer.classList.add('text-blue-200', 'animate-pulse');
+        els.statusSaveContainer.innerHTML = `<span id="status-save">Saving...</span>`;
+        
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+          tabs = tabs.map(t => ({ ...t, isModified: false }));
+          localStorage.setItem('ynote-tabs', JSON.stringify(tabs));
+          renderTabs();
+          
+          els.statusSaveContainer.classList.remove('text-blue-200', 'animate-pulse');
+          els.statusSaveContainer.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> <span id="status-save">Saved</span>`;
+          lucide.createIcons();
+        }, 1000);
+      }
+    }
+
+    function updateEditorContent(rebuildOverlay = true) {
+      const activeTab = getActiveTab();
+      if (!activeTab) return;
+
+      if (rebuildOverlay) {
+        els.editorTextarea.value = activeTab.content;
+        els.noteTitle.value = activeTab.title;
+      }
+
+      const content = els.editorTextarea.value;
+      const lines = content.split('\n').length;
+      const words = (content.match(/\b[-?(\w+)?]+\b/gi) || []).length;
+      
+      // Update Status
+      els.statusLines.innerText = lines;
+      els.statusWords.innerText = words;
+      els.statusChars.innerText = content.length;
+
+      // Update Overlay
+      if (settings.syntaxHighlighting) {
+        els.editorOverlay.innerHTML = highlightMarkdown(content);
+      }
+
+      // Update Line Numbers
+      if (settings.showLineNumbers) {
+        els.lineNumbers.innerHTML = Array.from({ length: Math.max(1, lines) })
+          .map((_, i) => `<div>${i + 1}</div>`).join('');
+      }
+
+      // Update Preview
+      if (settings.splitPreview) {
+        els.previewContent.innerHTML = parseMarkdown(content);
+      }
+    }
+
+    function renderTabs() {
+      els.tabsContainer.innerHTML = '';
+      tabs.forEach(tab => {
+        const isActive = tab.id === activeTabId;
+        const div = document.createElement('div');
+        div.className = `group flex items-center gap-2 px-4 py-2 min-w-[120px] max-w-[200px] border-r border-slate-200 dark:border-slate-700 cursor-pointer transition-all ${isActive ? 'bg-white dark:bg-slate-900 border-t-2 border-t-blue-500 text-blue-600 dark:text-blue-400 shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-750'}`;
+        div.onclick = () => { activeTabId = tab.id; updateEditorContent(); renderTabs(); };
+        
+        div.innerHTML = `
+          <i data-lucide="file-text" class="w-3.5 h-3.5 flex-shrink-0"></i>
+          <span class="truncate flex-1 text-sm font-medium">${tab.title}${tab.isModified ? '<span class="ml-1 text-blue-500">*</span>' : ''}</span>
+          <button class="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-slate-300 dark:hover:bg-slate-600 transition-opacity ${isActive ? 'opacity-100' : ''}" title="Close Tab">
+            <i data-lucide="x" class="w-3 h-3"></i>
+          </button>
+        `;
+        
+        div.querySelector('button').onclick = (e) => {
+          e.stopPropagation();
+          closeTab(tab.id);
+        };
+        els.tabsContainer.appendChild(div);
+      });
+      lucide.createIcons();
+    }
+
+    function closeTab(id) {
+      if (tabs.length === 1) {
+        tabs = [{ ...tabs[0], title: 'Untitled 1', content: '', isModified: false }];
+      } else {
+        tabs = tabs.filter(t => t.id !== id);
+        if (activeTabId === id) activeTabId = tabs[tabs.length - 1].id;
+      }
+      saveState();
+      updateEditorContent();
+      renderTabs();
+    }
+
+    // --- Markdown Parsers ---
+    function parseMarkdown(text) {
+      if (!text) return '';
+      return text
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") 
+        .replace(/^### (.*$)/gim, '<h3 class="text-xl font-bold mt-4 mb-2 text-slate-800 dark:text-slate-100">$1</h3>')
+        .replace(/^## (.*$)/gim, '<h2 class="text-2xl font-bold mt-5 mb-3 border-b border-slate-200 dark:border-slate-700 pb-1 text-slate-800 dark:text-slate-100">$1</h2>')
+        .replace(/^# (.*$)/gim, '<h1 class="text-3xl font-extrabold mt-6 mb-4 text-slate-900 dark:text-white">$1</h1>')
+        .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/gim, '<em>$1</em>')
+        .replace(/`(.*?)`/gim, '<code class="bg-slate-100 dark:bg-slate-800 text-pink-600 dark:text-pink-400 px-1.5 py-0.5 rounded font-mono text-sm">$1</code>')
+        .replace(/^\> (.*$)/gim, '<blockquote class="border-l-4 border-blue-500 pl-4 py-1 my-3 text-slate-600 dark:text-slate-400 italic bg-slate-50 dark:bg-slate-800/50">$1</blockquote>')
+        .replace(/^- (.*$)/gim, '<li class="ml-6 list-disc my-1">$1</li>')
+        .replace(/\n\n/gim, '<br/><br/>')
+        .replace(/\n(?!\<)/gim, '<br/>');
+    }
+
+    function highlightMarkdown(text) {
+      if (!text) return '';
+      let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      html = html.replace(/^(#{1,6}\s+.*)$/gm, '<span class="text-blue-600 dark:text-blue-400">$1</span>');
+      html = html.replace(/(\*\*.*?\*\*)/g, '<span class="text-purple-600 dark:text-purple-400">$1</span>');
+      html = html.replace(/(\*.*?\*)/g, '<span class="text-purple-500 dark:text-purple-300">$1</span>');
+      html = html.replace(/(`.*?`)/g, '<span class="text-pink-600 dark:text-pink-400 bg-slate-100 dark:bg-slate-800 rounded px-1">$1</span>');
+      html = html.replace(/^(>.*)$/gm, '<span class="text-green-600 dark:text-green-400">$1</span>');
+      html = html.replace(/^([-*]\s+.*)$/gm, '<span class="text-orange-600 dark:text-orange-400">$1</span>');
+      html = html.replace(/(\[.*?\]\(.*?\))/g, '<span class="text-teal-600 dark:text-teal-400 underline">$1</span>');
+      if (html.endsWith('\n')) html += ' ';
+      return html;
+    }
+
+    // --- Settings Sync ---
+    function applySettings() {
+      // Theme
+      document.documentElement.classList.toggle('dark', settings.theme === 'dark');
+      const themeIcon = document.getElementById('theme-icon');
+      if(themeIcon) {
+         themeIcon.setAttribute('data-lucide', settings.theme === 'dark' ? 'sun' : 'moon');
+         lucide.createIcons({ name: themeIcon.getAttribute('data-lucide') });
+      }
+
+      // Font Family
+      els.editorTextarea.classList.remove('font-mono', 'font-sans', 'font-serif');
+      els.editorOverlay.classList.remove('font-mono', 'font-sans', 'font-serif');
+      els.previewContainer.classList.remove('font-mono', 'font-sans', 'font-serif');
+      
+      els.editorTextarea.classList.add(settings.fontFamily);
+      els.editorOverlay.classList.add(settings.fontFamily);
+      els.previewContainer.classList.add(settings.fontFamily);
+
+      // Wrap
+      els.statusWrap.innerText = settings.wordWrap ? 'Wrap' : 'No Wrap';
+      if (settings.wordWrap) {
+        els.editorTextarea.classList.replace('whitespace-pre', 'whitespace-pre-wrap');
+        els.editorTextarea.classList.add('break-words');
+        els.editorOverlay.classList.replace('whitespace-pre', 'whitespace-pre-wrap');
+        els.editorOverlay.classList.add('break-words');
+      } else {
+        els.editorTextarea.classList.replace('whitespace-pre-wrap', 'whitespace-pre');
+        els.editorTextarea.classList.remove('break-words');
+        els.editorOverlay.classList.replace('whitespace-pre-wrap', 'whitespace-pre');
+        els.editorOverlay.classList.remove('break-words');
+      }
+
+      // Zen Mode (Full Screen)
+      if (settings.fullScreen) {
+        els.formattingToolbar.classList.add('hide');
+        els.tabBar.classList.add('hide');
+        document.getElementById('zen-icon').setAttribute('data-lucide', 'minimize-2');
+      } else {
+        els.formattingToolbar.classList.remove('hide');
+        els.tabBar.classList.remove('hide');
+        document.getElementById('zen-icon').setAttribute('data-lucide', 'maximize-2');
+      }
+      lucide.createIcons();
+
+      // Syntax Highlight Toggles
+      if (settings.syntaxHighlighting) {
+        els.editorTextarea.classList.add('editor-textarea');
+        els.editorTextarea.classList.remove('text-slate-800', 'dark:text-slate-300', 'bg-transparent');
+        els.editorOverlay.classList.remove('hide');
+      } else {
+        els.editorTextarea.classList.remove('editor-textarea');
+        els.editorTextarea.classList.add('text-slate-800', 'dark:text-slate-300', 'bg-transparent');
+        els.editorOverlay.classList.add('hide');
+      }
+
+      // Font Size
+      els.editorTextarea.style.fontSize = `${settings.fontSize}px`;
+      els.editorOverlay.style.fontSize = `${settings.fontSize}px`;
+      els.lineNumbersContainer.style.fontSize = `${settings.fontSize}px`;
+      els.previewContainer.style.fontSize = `${settings.fontSize}px`;
+
+      // UI Toggles (Panels)
+      els.lineNumbersContainer.classList.toggle('hide', !settings.showLineNumbers);
+      els.previewContainer.classList.toggle('hide', !settings.splitPreview);
+
+      // Settings Panel UI Update
+      updateSettingsToggles();
+      updateEditorContent(false);
+    }
+
+    function updateSettingsToggles() {
+      const updateToggle = (id, active) => {
+        const btn = document.getElementById(id);
+        const thumb = document.getElementById(`${id}-thumb`);
+        if (active) {
+          btn.classList.replace('bg-slate-300', 'bg-blue-500');
+          btn.classList.replace('dark:bg-slate-700', 'bg-blue-500');
+          thumb.classList.replace('translate-x-1', 'translate-x-6');
+        } else {
+          btn.classList.replace('bg-blue-500', 'bg-slate-300');
+          btn.classList.add('dark:bg-slate-700');
+          thumb.classList.replace('translate-x-6', 'translate-x-1');
+        }
+      };
+      updateToggle('toggle-wrap', settings.wordWrap);
+      updateToggle('toggle-lines', settings.showLineNumbers);
+      updateToggle('toggle-syntax', settings.syntaxHighlighting);
+      
+      document.getElementById('select-font').value = settings.fontFamily;
+      document.getElementById('range-font').value = settings.fontSize;
+      document.getElementById('font-size-display').innerText = `${settings.fontSize}px`;
+    }
+
+    // --- Helpers ---
+    function insertText(before, after = '') {
+      const start = els.editorTextarea.selectionStart;
+      const end = els.editorTextarea.selectionEnd;
+      const text = els.editorTextarea.value;
+      const selected = text.substring(start, end);
+      const newContent = text.substring(0, start) + before + selected + after + text.substring(end);
+      
+      tabs = tabs.map(t => t.id === activeTabId ? { ...t, content: newContent } : t);
+      updateEditorContent();
+      saveState(true);
+
+      setTimeout(() => {
+        els.editorTextarea.focus();
+        els.editorTextarea.setSelectionRange(start + before.length, end + before.length);
+      }, 0);
+    }
+
+    // --- Event Listeners Setup ---
+    function setupEventListeners() {
+      // Editor Typing
+      els.editorTextarea.addEventListener('input', (e) => {
+        tabs = tabs.map(t => t.id === activeTabId ? { ...t, content: e.target.value } : t);
+        updateEditorContent(false); // don't rebuild textarea value while typing
+        saveState(true);
+      });
+
+      // Scroll Syncing
+      els.editorTextarea.addEventListener('scroll', (e) => {
+        if(settings.showLineNumbers) els.lineNumbersContainer.scrollTop = e.target.scrollTop;
+        if(settings.syntaxHighlighting) {
+          els.editorOverlay.scrollTop = e.target.scrollTop;
+          els.editorOverlay.scrollLeft = e.target.scrollLeft;
+        }
+        if (settings.splitPreview) {
+          const scrollPercentage = e.target.scrollTop / (e.target.scrollHeight - e.target.clientHeight);
+          if(!isNaN(scrollPercentage)) {
+            els.previewContainer.scrollTop = scrollPercentage * (els.previewContainer.scrollHeight - els.previewContainer.clientHeight);
+          }
+        }
+      });
+
+      // Keydowns (Tabs, Shortcuts)
+      els.editorTextarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') { e.preventDefault(); insertText('    '); }
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); document.getElementById('btn-save').click(); }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') { e.preventDefault(); document.getElementById('btn-find').click(); }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'b') { e.preventDefault(); insertText('**', '**'); }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'i') { e.preventDefault(); insertText('*', '*'); }
+      });
+
+      // Title Change
+      els.noteTitle.addEventListener('input', (e) => {
+        tabs = tabs.map(t => t.id === activeTabId ? { ...t, title: e.target.value } : t);
+        saveState(true);
+      });
+
+      // Top Bar Buttons
+      document.getElementById('btn-new').onclick = () => {
+        const newId = crypto.randomUUID();
+        tabs.push({ id: newId, title: `Untitled ${tabs.length + 1}`, content: '', isModified: false });
+        activeTabId = newId;
+        saveState(); updateEditorContent(); renderTabs();
+      };
+      
+      document.getElementById('btn-tab-add').onclick = document.getElementById('btn-new').onclick;
+
+      document.getElementById('btn-open').onclick = () => els.fileInput.click();
+      els.fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const newId = crypto.randomUUID();
+          tabs.push({ id: newId, title: file.name, content: event.target.result, isModified: false });
+          activeTabId = newId;
+          saveState(); updateEditorContent(); renderTabs();
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+      });
+
+      document.getElementById('btn-save').onclick = () => {
+        const activeTab = getActiveTab();
+        const blob = new Blob([activeTab.content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${activeTab.title || 'document'}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      document.getElementById('btn-theme').onclick = () => {
+        settings.theme = settings.theme === 'dark' ? 'light' : 'dark';
+        saveState(); applySettings();
+      };
+
+      document.getElementById('btn-preview').onclick = () => {
+        settings.splitPreview = !settings.splitPreview;
+        saveState(); applySettings();
+      };
+
+      document.getElementById('btn-zen').onclick = () => {
+        settings.fullScreen = !settings.fullScreen;
+        saveState(); applySettings();
+      };
+
+      // Settings Panel
+      document.getElementById('btn-settings').onclick = () => els.settingsPanel.classList.toggle('hide');
+      document.getElementById('btn-close-settings').onclick = () => els.settingsPanel.classList.add('hide');
+
+      document.getElementById('toggle-wrap').onclick = () => { settings.wordWrap = !settings.wordWrap; saveState(); applySettings(); };
+      document.getElementById('toggle-lines').onclick = () => { settings.showLineNumbers = !settings.showLineNumbers; saveState(); applySettings(); };
+      document.getElementById('toggle-syntax').onclick = () => { settings.syntaxHighlighting = !settings.syntaxHighlighting; saveState(); applySettings(); };
+      
+      document.getElementById('select-font').onchange = (e) => { settings.fontFamily = e.target.value; saveState(); applySettings(); };
+      document.getElementById('range-font').oninput = (e) => { settings.fontSize = parseInt(e.target.value); saveState(); applySettings(); };
+
+      // Find & Replace
+      document.getElementById('btn-find').onclick = () => els.findPanel.classList.toggle('hide');
+      document.getElementById('btn-close-find').onclick = () => els.findPanel.classList.add('hide');
+
+      document.getElementById('btn-execute-find').onclick = () => {
+        const findText = els.findInput.value;
+        if (!findText) return;
+        const content = els.editorTextarea.value;
+        const index = content.indexOf(findText, els.editorTextarea.selectionEnd);
+        if (index !== -1) {
+          els.editorTextarea.focus();
+          els.editorTextarea.setSelectionRange(index, index + findText.length);
+        } else {
+          const firstIndex = content.indexOf(findText);
+          if (firstIndex !== -1) {
+             els.editorTextarea.focus();
+             els.editorTextarea.setSelectionRange(firstIndex, firstIndex + findText.length);
+          }
+        }
+      };
+
+      document.getElementById('btn-execute-replace').onclick = () => {
+        const findText = els.findInput.value;
+        const replaceText = els.replaceInput.value;
+        if (!findText) return;
+        const start = els.editorTextarea.selectionStart;
+        const end = els.editorTextarea.selectionEnd;
+        const content = els.editorTextarea.value;
+
+        if (start !== end && content.substring(start, end) === findText) {
+          const newContent = content.substring(0, start) + replaceText + content.substring(end);
+          tabs = tabs.map(t => t.id === activeTabId ? { ...t, content: newContent } : t);
+          updateEditorContent(); saveState(true);
+          setTimeout(() => {
+            els.editorTextarea.focus();
+            els.editorTextarea.setSelectionRange(start, start + replaceText.length);
+          }, 0);
+        } else {
+          document.getElementById('btn-execute-find').click();
+        }
+      };
+
+      document.getElementById('btn-execute-replace-all').onclick = () => {
+        const findText = els.findInput.value;
+        if (!findText) return;
+        const replaceText = els.replaceInput.value;
+        const content = els.editorTextarea.value;
+        const newContent = content.split(findText).join(replaceText);
+        tabs = tabs.map(t => t.id === activeTabId ? { ...t, content: newContent } : t);
+        updateEditorContent(); saveState(true);
+      };
+
+      // Formatting Toolbar Buttons
+      document.querySelectorAll('.format-btn').forEach(btn => {
+        btn.onclick = () => insertText(btn.getAttribute('data-before') || '', btn.getAttribute('data-after') || '');
+      });
+
+      document.getElementById('btn-upper').onclick = () => transformText('upper');
+      document.getElementById('btn-lower').onclick = () => transformText('lower');
+      document.getElementById('btn-date').onclick = () => insertText(new Date().toLocaleString());
+      document.getElementById('btn-clear').onclick = () => {
+        if(confirm('Clear all content?')) {
+          tabs = tabs.map(t => t.id === activeTabId ? { ...t, content: '' } : t);
+          updateEditorContent(); saveState(true);
+        }
+      };
+
+      function transformText(type) {
+        const start = els.editorTextarea.selectionStart;
+        const end = els.editorTextarea.selectionEnd;
+        const text = els.editorTextarea.value;
+        const selected = text.substring(start, end);
+        if (!selected) return; 
+
+        let transformed = type === 'upper' ? selected.toUpperCase() : selected.toLowerCase();
+        const newContent = text.substring(0, start) + transformed + text.substring(end);
+        
+        tabs = tabs.map(t => t.id === activeTabId ? { ...t, content: newContent } : t);
+        updateEditorContent(); saveState(true);
+        
+        setTimeout(() => {
+          els.editorTextarea.focus();
+          els.editorTextarea.setSelectionRange(start, start + transformed.length);
+        }, 0);
+      }
+    }
+  </script>
+</body>
+</html>
